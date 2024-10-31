@@ -1,31 +1,56 @@
 async function handleRequest(request) {
-    const USER_ID = 'temp';
     const url = new URL(request.url);
     const path = url.pathname.split('/').filter(Boolean);
 
     const getResponse = (content, type = 'text/plain') =>
         new Response(content, { headers: { 'Content-Type': `${type}; charset=utf-8` } });
 
-    const renderForm = (input1 = '', input2 = '') => `
+    const renderForm = (userId = '', input1 = '', input2 = '') => `
         <html>
         <head>
             <meta charset="UTF-8">
             <style>
-                body { display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #e6f7ff; font-family: Arial, sans-serif; margin: 0; }
-                .container { text-align: center; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1); max-width: 80%; }
-                textarea { width: 100%; min-height: 100px; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; resize: vertical; }
-                input[type="submit"] { background-color: #007BFF; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 16px; }
+                * { box-sizing: border-box; }
+                body { display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #f0f4f8; font-family: 'Helvetica Neue', Arial, sans-serif; margin: 0; }
+                .container { text-align: center; background: #ffffff; padding: 40px 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1); width: 90%; max-width: 600px; }
+                h1 { color: #333; font-size: 24px; margin-bottom: 20px; }
+                label { display: block; font-weight: bold; color: #555; margin-top: 15px; }
+                input[type="text"], textarea { 
+                    width: 100%; padding: 12px; margin-top: 8px; margin-bottom: 20px; 
+                    border: 1px solid #ccc; border-radius: 6px; font-size: 16px; 
+                    transition: border-color 0.3s ease-in-out; 
+                }
+                input[type="text"]:focus, textarea:focus { border-color: #66afe9; outline: none; }
+                textarea { min-height: 120px; resize: vertical; }
+                input[type="submit"] { 
+                    background-color: #007BFF; color: white; padding: 12px 25px; border: none; 
+                    border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; 
+                    transition: background-color 0.3s ease; 
+                }
                 input[type="submit"]:hover { background-color: #0056b3; }
             </style>
+            <script>
+                function setFormAction() {
+                    const userId = document.getElementById('userId').value;
+                    if (userId) {
+                        document.getElementById('form').action = '/' + userId + '/manage';
+                    }
+                }
+            </script>
         </head>
         <body>
             <div class="container">
                 <h1>订阅仓库</h1>
-                <form method="POST" action="/${USER_ID}/manage">
+                <form method="POST" id="form" onsubmit="setFormAction()">
+                    <label for="userId">User ID:</label>
+                    <input type="text" id="userId" name="user_id" value="${userId}" placeholder="输入您的 User ID" required>
+                    
                     <label for="input1">节点:</label>
-                    <textarea id="input1" name="input1" required>${input1}</textarea>
+                    <textarea id="input1" name="input1" placeholder="在此输入节点信息" required>${input1}</textarea>
+                    
                     <label for="input2">订阅:</label>
-                    <textarea id="input2" name="input2" required>${input2}</textarea>
+                    <textarea id="input2" name="input2" placeholder="在此输入订阅内容" required>${input2}</textarea>
+                    
                     <input type="submit" value="提交">
                 </form>
             </div>
@@ -33,28 +58,33 @@ async function handleRequest(request) {
         </html>
     `;
 
-    if (request.method === 'POST' && path[0] === USER_ID && path[1] === 'manage') {
-        const { input1 = '', input2 = '' } = Object.fromEntries(await request.formData());
-        await mixproxy.put(USER_ID, `${input1}\n${input2}`);
-        return getResponse('节点已保存！');
-    }
-
-    if (path[0] === USER_ID && path[1] === 'manage') {
-        const userid = (await mixproxy.get(USER_ID)) || '';
-        const [input1, input2] = userid.split('\n');
-        return getResponse(renderForm(input1, input2), 'text/html');
+    if (request.method === 'POST') {
+        const formData = Object.fromEntries(await request.formData());
+        const userId = formData.user_id || 'temp';
+        const input1 = formData.input1 || '';
+        const input2 = formData.input2 || '';
+        
+        if (path[0] === userId && path[1] === 'manage') {
+            await mixproxy.put(userId, `${input1}\n${input2}`);
+            return getResponse('节点已保存！');
+        }
+        
+        return getResponse(renderForm(userId, input1, input2), 'text/html');
     }
 
     if (path.length === 0) {
         return getResponse(renderForm(), 'text/html');
     }
 
-    if (path[0] === USER_ID) {
-        const userid = (await mixproxy.get(USER_ID)) || '';
-        return getResponse(userid);
+    const userId = path[0];
+    if (path[1] === 'manage') {
+        const useridData = (await mixproxy.get(userId)) || '';
+        const [input1, input2] = useridData.split('\n');
+        return getResponse(renderForm(userId, input1, input2), 'text/html');
     }
 
-    return getResponse('未找到该用户', 'text/plain', 404);
+    const useridData = (await mixproxy.get(userId)) || '';
+    return getResponse(useridData);
 }
 
 addEventListener('fetch', event => event.respondWith(handleRequest(event.request)));
