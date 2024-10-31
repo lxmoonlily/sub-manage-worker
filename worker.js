@@ -84,6 +84,10 @@ async function handleRequest(request) {
     }
 
     const useridData = (await mixproxy.get(userId)) || '';
+    
+    if (!useridData) {
+        return getResponse('未找到该用户', 'text/plain', 404);
+    }
     return getResponse(useridData);
 }
 
