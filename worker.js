@@ -66,7 +66,17 @@ async function handleRequest(request) {
         
         if (path[0] === userId && path[1] === 'manage') {
             await mixproxy.put(userId, `${input1}\n${input2}`);
-            return getResponse('节点已保存！');
+            return getResponse(`
+                <html>
+                <head>
+                    <script>
+                        alert('节点已保存！');
+                        window.location.href = '/${userId}/manage'; // Redirect back to manage page
+                    </script>
+                </head>
+                <body></body>
+                </html>
+            `, 'text/html');
         }
         
         return getResponse(renderForm(userId, input1, input2), 'text/html');
