@@ -2,6 +2,7 @@
 addEventListener('fetch', event => event.respondWith(handleRequest(event.request)));
 
 async function handleRequest(request) {
+    // 默认的 sublink 和 subconfig 值
 
     // 解析请求的URL
     const url = new URL(request.url);
@@ -11,7 +12,8 @@ async function handleRequest(request) {
     // 获取加密用户名
     const { uuid, randomNum } = await Random_UUID_Number(userId, 1, 50);
     let olduserid = await findUserId(userId, uuid);
-
+    let sublink = "";
+    let subconfig = "";
     // 处理POST请求
     if (request.method === 'POST') {
         const formData = Object.fromEntries(await request.formData());
@@ -70,12 +72,12 @@ async function handleRequest(request) {
         }
     }
 
-    const [encInput1, encInput2 ,sublink, subconfig] = useridData.split('@split@');
+    const [encInput1, encInput2 ,sub_link, sub_config] = useridData.split('@split@');
 
     const basePathMap = {
-        "x": `${sublink}/xray?config=`,
-        "c": `${sublink}/clash?config=`,
-        "s": `${sublink}/singbox?config=`
+        "x": `${sub_link}/xray?config=`,
+        "c": `${sub_link}/clash?config=`,
+        "s": `${sub_link}/singbox?config=`
     };
 
     if (!useridData) {
@@ -92,7 +94,7 @@ async function handleRequest(request) {
 
     const responsePath = basePathMap[path[1]];
     if (responsePath) {
-        return getResponse(await fetchXrayText(responsePath, input1, input2, subconfig));
+        return getResponse(await fetchXrayText(responsePath, input1, input2, sub_config));
     } else {
         return getResponse(`${input1}\n${input2}`);
     }
