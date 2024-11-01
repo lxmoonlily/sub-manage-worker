@@ -327,16 +327,7 @@ async function findUserId(targetUserId, uuid) {
     return "";
 }
 
-async function encd(plaintext, uuid) {
-    return await encryptWithUUID(plaintext, uuid);
-  }
-
-async function decd(encryptedText, uuid) {
-    return await decryptWithUUID(encryptedText, uuid);
-  }
-  
-
-  async function encryptWithUUID(plaintext, uuid) {
+  async function encd(plaintext, uuid) {
     const iv = crypto.getRandomValues(new Uint8Array(12)); // 生成 12 字节的初始化向量 (IV)
     const encoder = new TextEncoder();
     
@@ -365,7 +356,7 @@ async function decd(encryptedText, uuid) {
     return `${ivHex}:${encryptedText}`;
   }
 
-async function decryptWithUUID(encryptedText, uuid) {
+async function decd(encryptedText, uuid) {
     const [ivHex, encryptedContent] = encryptedText.split(':');
     const iv = new Uint8Array(ivHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
     const encoder = new TextEncoder();
