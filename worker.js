@@ -2,123 +2,99 @@
 addEventListener('fetch', event => event.respondWith(handleRequest(event.request)));
 
 async function handleRequest(request) {
+
     // 解析请求的URL
     const url = new URL(request.url);
-    
-    // 获取请求路径并过滤掉空值部分
     const path = url.pathname.split('/').filter(Boolean);
-
-    // 获取用户ID
     const userId = path[0];
     
-    // 按照用户id获取固定的随机值和uuid
+    // 获取加密用户名
     const { uuid, randomNum } = await Random_UUID_Number(userId, 1, 50);
-
-    //获取加密用户名
     let olduserid = await findUserId(userId, uuid);
 
     // 处理POST请求
     if (request.method === 'POST') {
-        // 解析表单数据
         const formData = Object.fromEntries(await request.formData());
-        const { user_id: userId = '', input1 = '', input2 = '' } = formData;
+        const { user_id: userId = '', input1 = '', input2 = '', inputSublink = '', inputSubconfig = '' } = formData;
 
-        // 检查路径是否匹配用户管理请求
+        // 更新 sublink 和 subconfig 的值
+        sublink = inputSublink || sublink;
+        subconfig = inputSubconfig || subconfig;
+
         if (path[0] === userId && path[1] === 'manage') {
-            // 将节点信息存储到mixproxy中
-            const { uuid, randomNum } = await Random_UUID_Number(userId, 1, 50);
-            const eninput1 = await encd(input1,uuid);//加密
-            const eninput2 = await encd(input2,uuid);
-            // 根据是否存在加密用户名，将数据存储到 mixproxy 中
-            const newuserid = await encd(userId,uuid);
+            const eninput1 = await encd(input1, uuid);
+            const eninput2 = await encd(input2, uuid);
+            const newuserid = await encd(userId, uuid);
             olduserid = await findUserId(userId, uuid);
             const storageKey = olduserid || newuserid;
             if (storageKey) {
-                await mixproxy.put(storageKey, `${eninput1}@split@${eninput2}`);
+                await mixproxy.put(storageKey, `${eninput1}@split@${eninput2}@split@${inputSublink}@split@${inputSubconfig}`);
             } else {
                 console.error('User ID encryption error.');
             }
-            // 返回成功保存的响应
             return getResponse(`
                 <html>
                 <head>
                     <script>
                         alert('节点已保存！');
-                        window.location.href = '/${userId}/manage'; // 跳转到管理页面
+                        window.location.href = '/${userId}/manage';
                     </script>
                 </head>
                 <body></body>
                 </html>
             `, 'text/html');
         }
-
-        // 如果不是管理请求，返回渲染的表单
-        return getResponse(renderForm(userId, input1, input2), 'text/html');
+        return getResponse(renderForm(userId, input1, input2, inputSublink, inputSubconfig), 'text/html');
     }
 
-    // 如果路径为空，则返回初始表单
     if (path.length === 0) {
         return getResponse(renderForm(), 'text/html');
     }
-    
-    // 处理删除用户请求
+
     if (path[1] === 'delete') {
-        await mixproxy.delete(olduserid); // 从mixproxy中删除用户
-        return getResponse('用户已删除！'); // 返回删除成功的响应
-    }
-    
-    let useridData = "";
-
-    olduserid = await findUserId(userId,uuid);
-
-    //获取用户数据
-    if (olduserid){
-        useridData = (await mixproxy.get(olduserid)) || '';
-    }
-    else{
-        useridData = '';
+        await mixproxy.delete(olduserid);
+        return getResponse('用户已删除！');
     }
 
-    // 处理用户管理请求
+    let useridData = olduserid ? (await mixproxy.get(olduserid)) || '' : '';
+
     if (path[1] === 'manage') {
         if (useridData === '') {
-            // 生成订阅链接
             const randomSubscriptions = Array.from({ length: randomNum }, () => 
                 `vless://${uuid}@hk-work.lxmoon.eu.org:443?encryption=none&security=tls&sni=hk-work.lxmoon.eu.org&fp=randomized&type=ws&host=hk-work.lxmoon.eu.org&path=%2F%3Fed%3D2048#hk-work.lxmoon.eu.org`
             );
-    
-            // 将随机订阅链接组合成字符串赋值给 input1
-            input1 = randomSubscriptions.join("\n");
-            input2 = ''; // input2 为空字符串
-    
-            return getResponse(renderForm(userId, input1, input2), 'text/html');
+            return getResponse(renderForm(userId, randomSubscriptions.join("\n"), '', sublink, subconfig), 'text/html');
+        } else {
+            const [input1, input2, inputSublink, inputSubconfig] = useridData.split('@split@');
+            return getResponse(renderForm(userId, await decd(input1, uuid), await decd(input2, uuid), inputSublink, inputSubconfig), 'text/html');
         }
-        else{
-            const [input1, input2] = useridData.split('@split@'); // 分割数据为两个部分
-            const deinput1 = await decd(input1,uuid);//解密
-            const deinput2 = await decd(input2,uuid);
-            return getResponse(renderForm(userId, deinput1, deinput2), 'text/html'); // 返回带有用户数据的表单
-        }
-
     }
 
+    const [encInput1, encInput2 ,sublink, subconfig] = useridData.split('@split@');
+
+    const basePathMap = {
+        "x": `${sublink}/xray?config=`,
+        "c": `${sublink}/clash?config=`,
+        "s": `${sublink}/singbox?config=`
+    };
+
     if (!useridData) {
-
-        const randomLinks = await Promise.all(
-            Array.from({ length: randomNum }, async () => {
-                return `vless://${uuid}@hk-work.lxmoon.eu.org:443?encryption=none&security=tls&sni=hk-work.lxmoon.eu.org&fp=randomized&type=ws&host=hk-work.lxmoon.eu.org&path=%2F%3Fed%3D2048#hk-work.lxmoon.eu.org`;
-            })
+        const randomSubscriptions = Array.from({ length: randomNum }, () =>
+            `vless://${uuid}@hk-work.lxmoon.eu.org:443?encryption=none&security=tls&sni=hk-work.lxmoon.eu.org&fp=randomized&type=ws&host=hk-work.lxmoon.eu.org&path=%2F%3Fed%3D2048#hk-work.lxmoon.eu.org`
         );
-
-        // 将生成的链接数组拼接成字符串并返回
-        const result = randomLinks.join("\n");
-        return getResponse(result);
-
+        input1 = randomSubscriptions.join("\n");
+        input2 = '';
     } else {
-        const [input1, input2] = useridData.split('@split@'); // 分割用户数据
-        const deinput1 = await decd(input1,uuid);
-        const deinput2 = await decd(input2,uuid);
-        return getResponse(`${deinput1}\n${deinput2}`); // 返回解密的用户数据
+
+        input1 = await decd(encInput1, uuid);
+        input2 = await decd(encInput2, uuid);
+    }
+
+    const responsePath = basePathMap[path[1]];
+    if (responsePath) {
+        return getResponse(await fetchXrayText(responsePath, input1, input2, subconfig));
+    } else {
+        return getResponse(`${input1}\n${input2}`);
     }
 }
 
@@ -149,7 +125,7 @@ const getResponse = (content, type = 'text/plain', status = 200) =>
     new Response(content, { headers: { 'Content-Type': `${type}; charset=utf-8` }, status });
 
 // 渲染表单的函数，接受用户ID和两个输入框的内容
-const renderForm = (userId = '', input1 = '', input2 = '') => `
+const renderForm = (userId = '', input1 = '', input2 = '', inputSublink = '', inputSubconfig = '') => `
     <html>
         <head>
             <meta charset="UTF-8">
@@ -269,23 +245,29 @@ const renderForm = (userId = '', input1 = '', input2 = '') => `
             </script>
         </head>
         <body>
-            <div class="container">
-                <h1>订阅仓库</h1>
-                <form method="POST" id="form" onsubmit="setFormAction()">
-                    <label for="userId">User ID:</label>
-                    <input type="text" id="userId" name="user_id" value="${userId}" placeholder="输入您的 User ID" required>
-                    
-                    <label for="input1">节点:</label>
-                    <textarea id="input1" name="input1" placeholder="在此输入节点信息" required>${input1}</textarea>
-                    
-                    <label for="input2">订阅:</label>
-                    <textarea id="input2" name="input2" placeholder="在此输入订阅内容" required>${input2}</textarea>
-                    
-                    <input type="submit" value="提交">
-                    <button type="button" onclick="deleteUser('${userId}')">删除</button>
-                </form>
-            </div>
-        </body>
+        <div class="container">
+            <h1>订阅仓库</h1>
+            <form method="POST" id="form" onsubmit="setFormAction()">
+                <label for="userId">User ID:</label>
+                <input type="text" id="userId" name="user_id" value="${userId}" placeholder="输入您的 User ID" required>
+                
+                <label for="input1">节点:</label>
+                <textarea id="input1" name="input1" placeholder="在此输入节点信息" required>${input1}</textarea>
+                
+                <label for="input2">订阅:</label>
+                <textarea id="input2" name="input2" placeholder="在此输入订阅内容" required>${input2}</textarea>
+                
+                <label for="inputSublink">Sublink:</label>
+                <input type="text" id="inputSublink" name="inputSublink" value="${inputSublink}" placeholder="输入Sublink URL">
+                
+                <label for="inputSubconfig">Subconfig:</label>
+                <textarea id="inputSubconfig" name="inputSubconfig" placeholder="在此输入Subconfig配置">${inputSubconfig}</textarea>
+                
+                <input type="submit" value="提交">
+                <button type="button" onclick="deleteUser('${userId}')">删除</button>
+            </form>
+        </div>
+    </body>
     </html>
 `;
 
@@ -326,6 +308,23 @@ async function findUserId(targetUserId, uuid) {
 
     return "";
 }
+
+async function fetchXrayText(baseURL, text1, text2, subconfig) {
+    // 拼接两个文本
+    const combinedText = `${text1}\n${text2}`;
+  
+    // 对拼接后的文本进行 URL 编码
+    const encodedText = encodeURIComponent(combinedText);
+  
+    // 构建完整的 URL
+    const fullUrl = `${baseURL}${encodedText}${subconfig}`;
+  
+    // 发起请求并获取返回内容
+    const response = await fetch(fullUrl);
+    const xraytext = await response.text();
+  
+    return xraytext; // 返回请求到的内容
+  }
 
   async function encd(plaintext, uuid) {
     const iv = crypto.getRandomValues(new Uint8Array(12)); // 生成 12 字节的初始化向量 (IV)
