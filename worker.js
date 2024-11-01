@@ -79,8 +79,6 @@ async function handleRequest(request) {
         useridData = '';
     }
 
-    console.info(olduserid,useridData,userId);
-
     // 处理用户管理请求
     if (path[1] === 'manage') {
         if (useridData === '') {
