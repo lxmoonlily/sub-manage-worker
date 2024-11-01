@@ -1,11 +1,22 @@
-一个基于cloudflare worker编写的节点和订阅的管理面板
+# Cloudflare Worker 订阅管理面板
 
-安装步骤
+一个基于 Cloudflare Worker 编写的节点和订阅的管理面板。
 
-1、复制worker.js到新建的worker项目中
+## 安装步骤
 
-2、创建kv变量
+1. 复制 `worker.js` 到新建的 Worker 项目中。
+2. 创建 KV 变量。
+3. 绑定 KV 到新建的项目中。
+4. 修改代码中 KV 变量的名称与绑定的 KV 变量名称一致。
 
-3、绑定kv到新建的项目中
+## 使用说明
 
-4、修改代码中kv变量的名称与绑定的kv变量名称一致。
+1. 填写对应的信息
+
+   ![image](https://github.com/user-attachments/assets/c1c05d2e0c4c69c4b57d29fade)
+
+2. 输入域名/userid 查看节点和订阅信息。
+3. 输入域名/userid/manage 管理用户数据。
+4. 输入域名/userid/x 转换成 xray，/c 转换成 clash，/s 转换成 singbox。
+
+详细的功能与代码实现可以参考完整代码部分，确保在实际使用时进行必要的修改与配置。
