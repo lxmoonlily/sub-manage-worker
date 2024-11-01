@@ -1,9 +1,11 @@
 async function handleRequest(request) {
+
     const url = new URL(request.url);
+    
     const path = url.pathname.split('/').filter(Boolean);
 
-    const getResponse = (content, type = 'text/plain') =>
-        new Response(content, { headers: { 'Content-Type': `${type}; charset=utf-8` } });
+    const getResponse = (content, type = 'text/plain', status = 200) =>
+        new Response(content, { headers: { 'Content-Type': `${type}; charset=utf-8` }, status });
 
     const renderForm = (userId = '', input1 = '', input2 = '') => `
         <html>
@@ -22,18 +24,14 @@ async function handleRequest(request) {
                 }
                 input[type="text"]:focus, textarea:focus { border-color: #66afe9; outline: none; }
                 textarea { min-height: 120px; resize: vertical; }
-                input[type="submit"] { 
+                input[type="submit"], button { 
                     background-color: #007BFF; color: white; padding: 12px 25px; border: none; 
                     border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; 
                     transition: background-color 0.3s ease; 
                 }
                 input[type="submit"]:hover { background-color: #0056b3; }
-                button { 
-                    background-color: #dc3545; color: white; padding: 12px 25px; border: none; 
-                    border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; 
-                    transition: background-color 0.3s ease; 
-                }
-                button:hover { background-color: #c82333; } /* Hover effect for delete button */
+                button { background-color: #dc3545; }
+                button:hover { background-color: #c82333; }
             </style>
             <script>
                 function setFormAction() {
@@ -42,8 +40,17 @@ async function handleRequest(request) {
                         document.getElementById('form').action = '/' + userId + '/manage';
                     }
                 }
+                function deleteUser(userId) {
+                    if (confirm('确定要删除该用户吗？')) {
+                        fetch('/' + userId + '/delete', { method: 'DELETE' })
+                            .then(response => response.text())
+                            .then(data => {
+                                alert(data);
+                                window.location.href = '/';
+                            });
+                    }
+                }
             </script>
-            
         </head>
         <body>
             <div class="container">
@@ -60,71 +67,60 @@ async function handleRequest(request) {
                     
                     <input type="submit" value="提交">
                     <button type="button" onclick="deleteUser('${userId}')">删除</button>
-
                 </form>
             </div>
-        <script>
-            function deleteUser(userId) {
-                if (confirm('确定要删除该用户吗？')) {
-                    fetch('/' + userId + '/delete', { method: 'DELETE' }) // 修改为 DELETE 请求
-                        .then(response => response.text())
-                        .then(data => {
-                            alert(data); // 显示删除结果
-                            window.location.href = '/'; // 重定向到主页
-                        });
-                }
-            }
-        </script>
         </body>
         </html>
     `;
 
-if (request.method === 'POST') {
-    const formData = Object.fromEntries(await request.formData());
-    const userId = formData.user_id || 'temp';
-    const input1 = formData.input1 || '';
-    const input2 = formData.input2 || '';
-    
-    if (path[0] === userId && path[1] === 'manage') {
-        await mixproxy.put(userId, `${input1}\n${input2}`);
-        return getResponse(`
-            <html>
-            <head>
-                <script>
-                    alert('节点已保存！');
-                    window.location.href = '/${userId}/manage'; // Redirect back to manage page
-                </script>
-            </head>
-            <body></body>
-            </html>
-        `, 'text/html');
+    if (request.method === 'POST') {
+        const formData = Object.fromEntries(await request.formData());
+        const { user_id: userId = 'temp', input1 = '', input2 = '' } = formData;
+
+        if (path[0] === userId && path[1] === 'manage') {
+            await mixproxy.put(userId, `${input1}@split@${input2}`);
+            return getResponse(`
+                <html>
+                <head>
+                    <script>
+                        alert('节点已保存！');
+                        window.location.href = '/${userId}/manage';
+                    </script>
+                </head>
+                <body></body>
+                </html>
+            `, 'text/html');
+        }
+
+        return getResponse(renderForm(userId, input1, input2), 'text/html');
     }
-    
-    return getResponse(renderForm(userId, input1, input2), 'text/html');
-}
 
     if (path.length === 0) {
         return getResponse(renderForm(), 'text/html');
     }
 
     const userId = path[0];
+
     if (path[1] === 'delete') {
-        await mixproxy.delete(userId); // 假设有一个 delete 方法来删除数据
+        await mixproxy.delete(userId);
         return getResponse('用户已删除！');
     }
-    
+
     if (path[1] === 'manage') {
         const useridData = (await mixproxy.get(userId)) || '';
-        const [input1, input2] = useridData.split('\n');
+        const [input1, input2] = useridData.split('@split@');
         return getResponse(renderForm(userId, input1, input2), 'text/html');
     }
 
     const useridData = (await mixproxy.get(userId)) || '';
-    
+
     if (!useridData) {
         return getResponse('未找到该用户', 'text/plain', 404);
     }
-    return getResponse(useridData);
+    else{
+        const [input1, input2] = useridData.split('@split@');
+        return getResponse(`${input1}\n${input2}`);
+    }
 }
 
 addEventListener('fetch', event => event.respondWith(handleRequest(event.request)));
