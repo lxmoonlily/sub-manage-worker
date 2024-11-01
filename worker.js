@@ -2,8 +2,7 @@
 addEventListener('fetch', event => event.respondWith(handleRequest(event.request)));
 
 async function handleRequest(request) {
-    // 默认的 sublink 和 subconfig 值
-
+    const fakedomain = "cloudflare.com"
     // 解析请求的URL
     const url = new URL(request.url);
     const path = url.pathname.split('/').filter(Boolean);
@@ -63,7 +62,7 @@ async function handleRequest(request) {
     if (path[1] === 'manage') {
         if (useridData === '') {
             const randomSubscriptions = Array.from({ length: randomNum }, () => 
-                `vless://${uuid}@hk-work.lxmoon.eu.org:443?encryption=none&security=tls&sni=hk-work.lxmoon.eu.org&fp=randomized&type=ws&host=hk-work.lxmoon.eu.org&path=%2F%3Fed%3D2048#hk-work.lxmoon.eu.org`
+                `vless://${uuid}@${fakedomain}:443?encryption=none&security=tls&sni=${fakedomain}&fp=randomized&type=ws&host=${fakedomain}&path=%2F%3Fed%3D2048#${fakedomain}`
             );
             return getResponse(renderForm(userId, randomSubscriptions.join("\n"), '', sublink, subconfig), 'text/html');
         } else {
@@ -82,7 +81,7 @@ async function handleRequest(request) {
 
     if (!useridData) {
         const randomSubscriptions = Array.from({ length: randomNum }, () =>
-            `vless://${uuid}@hk-work.lxmoon.eu.org:443?encryption=none&security=tls&sni=hk-work.lxmoon.eu.org&fp=randomized&type=ws&host=hk-work.lxmoon.eu.org&path=%2F%3Fed%3D2048#hk-work.lxmoon.eu.org`
+            `vless://${uuid}@${fakedomain}:443?encryption=none&security=tls&sni=${fakedomain}&fp=randomized&type=ws&host=${fakedomain}&path=%2F%3Fed%3D2048#${fakedomain}`
         );
         input1 = randomSubscriptions.join("\n");
         input2 = '';
