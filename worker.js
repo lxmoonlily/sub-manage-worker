@@ -8,23 +8,43 @@ async function handleRequest(request) {
     // 获取请求路径并过滤掉空值部分
     const path = url.pathname.split('/').filter(Boolean);
 
+    // 获取用户ID
+    const userId = path[0];
+    
+    // 按照用户id获取固定的随机值和uuid
+    const { uuid, randomNum } = await Random_UUID_Number(userId, 1, 50);
+
+    //获取加密用户名
+    let olduserid = await findUserId(userId, uuid);
+
     // 处理POST请求
     if (request.method === 'POST') {
         // 解析表单数据
         const formData = Object.fromEntries(await request.formData());
-        const { user_id: userId = 'temp', input1 = '', input2 = '' } = formData;
+        const { user_id: userId = '', input1 = '', input2 = '' } = formData;
 
         // 检查路径是否匹配用户管理请求
         if (path[0] === userId && path[1] === 'manage') {
             // 将节点信息存储到mixproxy中
-            await mixproxy.put(userId, `${input1}@split@${input2}`);
+            const { uuid, randomNum } = await Random_UUID_Number(userId, 1, 50);
+            const eninput1 = await encd(input1,uuid);//加密
+            const eninput2 = await encd(input2,uuid);
+            // 根据是否存在加密用户名，将数据存储到 mixproxy 中
+            const newuserid = await encd(userId,uuid);
+            olduserid = await findUserId(userId, uuid);
+            const storageKey = olduserid || newuserid;
+            if (storageKey) {
+                await mixproxy.put(storageKey, `${eninput1}@split@${eninput2}`);
+            } else {
+                console.error('User ID encryption error.');
+            }
             // 返回成功保存的响应
             return getResponse(`
                 <html>
                 <head>
                     <script>
                         alert('节点已保存！');
-                        window.location.href = '/${userId}/manage'; // 跳转回管理页面
+                        window.location.href = '/${userId}/manage'; // 跳转到管理页面
                     </script>
                 </head>
                 <body></body>
@@ -40,25 +60,31 @@ async function handleRequest(request) {
     if (path.length === 0) {
         return getResponse(renderForm(), 'text/html');
     }
-
-    // 获取用户ID和数据 
-    const userId = path[0];
-    const useridData = (await mixproxy.get(userId)) || '';
     
     // 处理删除用户请求
     if (path[1] === 'delete') {
-        await mixproxy.delete(userId); // 从mixproxy中删除用户
+        await mixproxy.delete(olduserid); // 从mixproxy中删除用户
         return getResponse('用户已删除！'); // 返回删除成功的响应
     }
+    
+    let useridData = "";
+
+    olduserid = await findUserId(userId,uuid);
+
+    //获取用户数据
+    if (olduserid){
+        useridData = (await mixproxy.get(olduserid)) || '';
+    }
+    else{
+        useridData = '';
+    }
+
+    console.info(olduserid,useridData,userId);
 
     // 处理用户管理请求
     if (path[1] === 'manage') {
-        const useridData = (await mixproxy.get(userId)) || ''; // 获取用户数据
         if (useridData === '') {
-            // 获取与 userId 相关的 UUID 和随机订阅数量
-            const { uuid, randomNum } = await generateConsistentUUIDAndRandomNumber(userId, 1, 50); // 数量范围在 5 到 10 之间
-
-            // 生成指定数量的订阅链接
+            // 生成订阅链接
             const randomSubscriptions = Array.from({ length: randomNum }, () => 
                 `vless://${uuid}@hk-work.lxmoon.eu.org:443?encryption=none&security=tls&sni=hk-work.lxmoon.eu.org&fp=randomized&type=ws&host=hk-work.lxmoon.eu.org&path=%2F%3Fed%3D2048#hk-work.lxmoon.eu.org`
             );
@@ -71,14 +97,15 @@ async function handleRequest(request) {
         }
         else{
             const [input1, input2] = useridData.split('@split@'); // 分割数据为两个部分
-            return getResponse(renderForm(userId, input1, input2), 'text/html'); // 返回带有用户数据的表单
+            const deinput1 = await decd(input1,uuid);//解密
+            const deinput2 = await decd(input2,uuid);
+            return getResponse(renderForm(userId, deinput1, deinput2), 'text/html'); // 返回带有用户数据的表单
         }
 
     }
 
     if (!useridData) {
 
-        const { uuid, randomNum } = await generateConsistentUUIDAndRandomNumber(userId, 1, 50);
         const randomLinks = await Promise.all(
             Array.from({ length: randomNum }, async () => {
                 return `vless://${uuid}@hk-work.lxmoon.eu.org:443?encryption=none&security=tls&sni=hk-work.lxmoon.eu.org&fp=randomized&type=ws&host=hk-work.lxmoon.eu.org&path=%2F%3Fed%3D2048#hk-work.lxmoon.eu.org`;
@@ -91,11 +118,14 @@ async function handleRequest(request) {
 
     } else {
         const [input1, input2] = useridData.split('@split@'); // 分割用户数据
-        return getResponse(`${input1}\n${input2}`); // 返回用户数据
+        const deinput1 = await decd(input1,uuid);
+        const deinput2 = await decd(input2,uuid);
+        return getResponse(`${deinput1}\n${deinput2}`); // 返回解密的用户数据
     }
 }
 
-async function generateConsistentUUIDAndRandomNumber(userId, min = 0, max = 100) {
+//按照userid生成固定的随机uuid和数字
+async function Random_UUID_Number(userId, min = 0, max = 100) {
     const encoder = new TextEncoder();
     const data = encoder.encode(userId);
     const hashBuffer = await crypto.subtle.digest('SHA-256', data);
@@ -111,7 +141,7 @@ async function generateConsistentUUIDAndRandomNumber(userId, min = 0, max = 100)
     return { uuid, randomNum };
 }
 
-// 辅助函数：将字节转换为两位的十六进制字符串
+// 将字节转换为两位的十六进制字符串
 function toHex(byte) {
     return byte.toString(16).padStart(2, '0');
 }
@@ -204,7 +234,7 @@ const renderForm = (userId = '', input1 = '', input2 = '') => `
                 }
             </style>
             <script>
-                // 设置表单的提交地址，基于用户ID动态改变
+                // 设置表单的提交地址,基于用户ID动态改变
                 function setFormAction() {
                     const userId = document.getElementById('userId').value;
                     if (userId) {
@@ -212,7 +242,7 @@ const renderForm = (userId = '', input1 = '', input2 = '') => `
                     }
                 }
 
-                // 删除用户的函数，确认后发送DELETE请求
+                // 删除用户的函数,确认后发送DELETE请求
                 function deleteUser(userId) {
                     if (confirm('确定要删除该用户吗？')) {
                         fetch('/' + userId + '/delete', { method: 'DELETE' })
@@ -260,3 +290,107 @@ const renderForm = (userId = '', input1 = '', input2 = '') => `
         </body>
     </html>
 `;
+
+async function findUserId(targetUserId, uuid) {
+    if (targetUserId === "") {
+        return "";
+    }
+    
+    let cursor = null;
+    do {
+        const keysList = await mixproxy.list({ cursor });
+        if (keysList.keys.length === 0) break;
+
+        try {
+            // 使用 Promise.all 并发解密 keys
+            const decryptedResults = await Promise.all(
+                keysList.keys.map(async (key) => {
+                    try {
+                        return { name: key.name, decrypted: await decd(key.name, uuid) };
+                    } catch (error) {
+                        return null; // 忽略解密失败的情况
+                    }
+                })
+            );
+
+            // 检查解密结果是否匹配 targetUserId
+            for (const result of decryptedResults) {
+                if (result && result.decrypted === targetUserId) {
+                    return result.name;
+                }
+            }
+        } catch (error) {
+            // 忽略处理解密结果时的异常
+        }
+
+        cursor = keysList.cursor;
+    } while (cursor);
+
+    return "";
+}
+
+async function encd(plaintext, uuid) {
+    return await encryptWithUUID(plaintext, uuid);
+  }
+
+async function decd(encryptedText, uuid) {
+    return await decryptWithUUID(encryptedText, uuid);
+  }
+  
+
+  async function encryptWithUUID(plaintext, uuid) {
+    const iv = crypto.getRandomValues(new Uint8Array(12)); // 生成 12 字节的初始化向量 (IV)
+    const encoder = new TextEncoder();
+    
+    // 使用 SHA-256 对 UUID 进行哈希，生成 256 位密钥
+    const uuidHash = await crypto.subtle.digest('SHA-256', encoder.encode(uuid));
+    const key = await crypto.subtle.importKey(
+      'raw',
+      uuidHash,
+      'AES-GCM',
+      false,
+      ['encrypt']
+    );
+  
+    const encryptedContent = await crypto.subtle.encrypt(
+      {
+        name: 'AES-GCM',
+        iv: iv
+      },
+      key,
+      encoder.encode(plaintext)
+    );
+  
+    // 将 IV 和加密内容组合成字符串，方便传输
+    const ivHex = Array.from(iv).map(b => b.toString(16).padStart(2, '0')).join('');
+    const encryptedText = btoa(String.fromCharCode(...new Uint8Array(encryptedContent)));
+    return `${ivHex}:${encryptedText}`;
+  }
+
+async function decryptWithUUID(encryptedText, uuid) {
+    const [ivHex, encryptedContent] = encryptedText.split(':');
+    const iv = new Uint8Array(ivHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+    const encoder = new TextEncoder();
+  
+    // 使用 SHA-256 对 UUID 进行哈希，生成 256 位密钥
+    const uuidHash = await crypto.subtle.digest('SHA-256', encoder.encode(uuid));
+    const key = await crypto.subtle.importKey(
+      'raw',
+      uuidHash,
+      'AES-GCM',
+      false,
+      ['decrypt']
+    );
+  
+    const encryptedBuffer = Uint8Array.from(atob(encryptedContent), c => c.charCodeAt(0));
+    const decryptedContent = await crypto.subtle.decrypt(
+      {
+        name: 'AES-GCM',
+        iv: iv
+      },
+      key,
+      encryptedBuffer
+    );
+  
+    return new TextDecoder().decode(decryptedContent);
+  }
