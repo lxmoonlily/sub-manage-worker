@@ -13,7 +13,8 @@
 
 1. 填写对应的信息
 
-   ![image](https://github.com/user-attachments/assets/c1c05d2e0c4c69c4b57d29fade)
+![image](https://github.com/user-attachments/assets/f47fbe5f-5276-4705-8aa6-7fc30e8bde5e)
+
 
 2. 输入域名/userid 查看节点和订阅信息。
 3. 输入域名/userid/manage 管理用户数据。
